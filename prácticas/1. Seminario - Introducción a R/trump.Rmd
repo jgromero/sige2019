@@ -1,0 +1,73 @@
+---
+title: "Índices de aprobación del presidente Donald Trump"
+output: html_notebook
+---
+
+Datos de [fivethirtyeight](https://projects.fivethirtyeight.com/trump-approval-ratings/).
+
+## Cargar datos
+Usaremos el paquete [curl](https://cran.r-project.org/web/packages/curl/vignettes/intro.html) para descargar los datos directamente de la web.
+```{r}
+library(curl)
+tmp <- tempfile()
+curl_download("https://projects.fivethirtyeight.com/trump-approval-data/approval_polllist.csv", tmp)
+data_raw <- read.csv(tmp, sep = ',')
+head(data_raw)
+str(data_raw)
+```
+## Preprocesar datos
+```{r}
+data <- data_raw
+data$modeldate <- as.POSIXct(data_raw$modeldate, format="%m/%d/%Y")
+data$startdate <- as.POSIXct(data_raw$startdate, format="%m/%d/%Y")
+data$enddate   <- as.POSIXct(data_raw$enddate, format="%m/%d/%Y")
+data$createddate <- as.POSIXct(data_raw$createddate, format="%m/%d/%Y")
+data$timestamp <- as.POSIXct(data_raw$timestamp, format="%H:%M:%S %d %b %Y")
+str(data)
+head(data)
+```
+## Explorar datos
+### Estadísticas básicas
+```{r}
+summary(data)
+```
+### Gráficos 
+```{r}
+library(dplyr)
+library(ggplot2)
+library(scales)
+
+plotdata <-
+  data %>%
+  select(c('poll_id', 'enddate', 'pollster', 'grade', 'samplesize', 'adjusted_approve', 'adjusted_disapprove')) %>%
+  filter(grade != '')
+ggplot(plotdata) + 
+  geom_point(aes(x = enddate, y = adjusted_approve), colour = '#3399CC', alpha = 0.4) +
+  geom_smooth(aes(x = enddate, y = adjusted_approve), colour = '#3399CC') +
+  geom_point(aes(x = enddate, y = adjusted_disapprove), colour = '#FF9900', alpha = 0.4) +
+  geom_smooth(aes(x = enddate, y = adjusted_disapprove), colour = '#FF9900') +
+  geom_hline(yintercept = 50, colour = 'darkgrey') +
+  labs(x = '', y = '') +
+  scale_x_datetime(
+    date_breaks = '1 month',
+    labels=date_format('%b\n%Y')) +
+  scale_y_continuous(limits = c(30, 70))
+
+plotdata <-
+  plotdata %>%
+  filter(pollster %in% c('Ipsos', 'Gallup', 'YouGov'))
+ggplot(plotdata) + 
+  geom_point(aes(x = enddate, y = adjusted_approve), colour = '#3399CC', alpha = 0.4) +
+  geom_smooth(aes(x = enddate, y = adjusted_approve), colour = '#3399CC') +
+  geom_point(aes(x = enddate, y = adjusted_disapprove), colour = '#FF9900', alpha = 0.4) +
+  geom_smooth(aes(x = enddate, y = adjusted_disapprove), colour = '#FF9900') +
+  geom_hline(yintercept = 50, colour = 'darkgrey') +
+  labs(x = '', y = '') +
+  scale_x_datetime(
+    date_breaks = '3 months',
+    labels=date_format('%b\n%Y')) +
+  scale_y_continuous(limits = c(30, 70)) +
+  facet_wrap(~pollster)
+  
+```
+
