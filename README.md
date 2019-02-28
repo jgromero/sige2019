@@ -1,5 +1,5 @@
 # SIGE 2018/2019
-Repositorio con materiales de la asignatura SIGE (Sistemas Inteligentes para la Gestión de la Empresa), Máster en Ingeniería Informática, Universidad de Granada, Curso 2018/2019.
+Repositorio con materiales de la asignatura [SIGE](http://masteres.ugr.es/ing-informatica/pages/info_academica/guias/curso_actual/2semestre/ficha_masterii_sige_100404/!) (Sistemas Inteligentes para la Gestión de la Empresa), Máster en Ingeniería Informática, Universidad de Granada, Curso 2018/2019.
 
 ## Bibliografía
 * **V. Mayer-Schonberger, K. Cukier** (2013) Big Data, A revolution that will transform how we live, work and think. Harcourt Publishing.
