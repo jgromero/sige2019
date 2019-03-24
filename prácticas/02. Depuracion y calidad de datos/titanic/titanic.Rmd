@@ -1,0 +1,405 @@
+---
+title: "Preprocesamiento de datos con conjunto de datos Titanic"
+output:
+  html_document:
+    df_print: paged
+html_notebook: default
+---
+
+Preprocesamiento de datos con el dataset [titanic](https://www.kaggle.com/c/titanic/).
+
+> El hundimiento del Titanic es una de las tragedias marítimas más conocidas de la historia. El 15 de abril de 1912, durante su viaje inaugural, el Titanic se hundió después de chocar contra un iceberg. En el accidente murieron 1502 personas de las 2224 que habían embarcado, inluyendo pasajeros y tripulación. Una de las razones por las que no se encontraron más supervivientes fue la falta de espacio en los barcos salvavidas. Así, aunque la suerte sin duda sonrió a los supervivientes, también resultaron más favorecidos algunos grupos de personas, como las mujeres, los niños y los pasajeros de la clase superior.
+
+**En este problema analizaremos qué tipos de personas tuvieron más probabilidades de sobrevivir. Para ello, aplicaremos técnicas de aprendizaje automático que nos permitirán predecir qué pasajeros sobrevivieron al hundimiento.**
+
+En primer lugar, nos centraremos en el pre-procesamiento de los datos utilizando [tidyverse](https://www.tidyverse.org), una colección de paquetes de R para Ciencia de Datos. En el libro _[R for Data Science](http://r4ds.had.co.nz)_ podemos encontrar documentación detallada sobre [tidyverse](https://www.tidyverse.org).
+
+<br/>
+**Índice**
+
+* [Lectura de datos](#Lectura de datos)
+* [Estado del conjunto de datos](#Estado del conjunto de datos)
+* [Predictor básico: todos los pasajeros mueren](#Predictor básico: todos los pasajeros mueren)
+* [Predictor refinado: todos los hombres mueren](#Predictor refinado: todos los hombres mueren)
+* [Predictor refinado: todos los hombres mueren, las mujeres en 3ª clase que pagan >= 20 mueren](#Predictor refinado: todos los hombres mueren, las mujeres en 3ª clase que pagan >= 20 mueren)
+* [Valores perdidos](#Valores perdidos)
+* [Valores con ruido](#Valores con ruido)
+
+## Lectura de datos 
+Comenzaremos utilizando el fichero [_train.csv_](https://www.kaggle.com/c/titanic/data) de Kaggle, donde encontramos los datos de 891 pasajeros y que utilizaremos para crear nuestro modelo de predicción.
+
+Para lectura de datos, utilizaremos alguna de las variantes de la función [<tt>read_</tt>](http://r4ds.had.co.nz/data-import.html). A continuación, podemos inspeccionar el contenido de la tabla de datos, que se almacena en formato [<tt>tibble</tt>](http://r4ds.had.co.nz/tibbles.html).
+
+```{r}
+library(tidyverse)
+data_raw <- read_csv('train.csv')
+data_raw # str(data_raw) , glimpse(data_raw)
+```
+
+## Estado del conjunto de datos
+Podemos identificar los valores perdidos de la tabla utilizando <tt>df_status</tt>, del paquete [<tt>funModeling</tt>](https://livebook.datascienceheroes.com/exploratory-data-analysis.html#dataset-health-status).
+```{r}
+library(funModeling)
+df_status(data_raw)
+```
+Algunas observaciones interesantes:
+
+* Los valores de _PassengerId_ y _Name_ son únicos
+* Existen dos valores diferentes para _Survived_, que es nuestro objetivo de clasificación
+* No sobrevivieron 549 pasajeros (61.62%)
+* Aparecen numerosos valores perdidos (_na_) en las variables _Age_ y _Cabin_
+
+Parte de estas situaciones se pueden identificar y procesar directamente manipulando la tabla <tt>df_status</tt>:
+```{r}
+status <- df_status(data_raw)
+
+## columnas con NAs
+na_cols <- status %>%
+  filter(p_na > 70) %>%
+  select(variable)
+## columnas con valores diferentes
+dif_cols <- status %>%
+  filter(unique > 0.8 * nrow(data_raw)) %>%
+  select(variable)
+
+## eliminar columnas
+remove_cols <- bind_rows(
+  list(na_cols, dif_cols)
+)
+data_reduced <- data_raw %>%
+  select(-one_of(remove_cols$variable))
+```
+
+## Predictor básico: todos los pasajeros mueren
+### Tablas
+A continuación, nos centramos en los valores de la variable _Survived_. Podemos obtener un resumen en forma de tabla utilizando <tt>table</tt>, que muestra un recuento basado en la variable(s) usada como argumento. De forma similar, <tt>prop.table</tt> muestra un recuento normalizado al intervalo [0, 1]. 
+```{r}
+table(data_raw$Survived)
+prop.table(table(data_raw$Survived))
+```
+### Realizar predicción con datos de test (1)
+Dado que alrededor del 60% de los pasajeros mueren, podemos asumir un clasificador muy sencillo que asigna a todos los pasajeros _Survived = 0_. Con este clasificador esperamos una tasa de acierto correspondiente del 60%.
+
+Para ello, vamos a leer el fichero _test.csv_, seleccionar solo la columna _PassengerId_ y asignar 0 a _Survived_, utilizando dos funcionalidades de <tt>dplyr</tt>:
+
+* [Pipes](http://r4ds.had.co.nz/pipes.html): Permiten encadenar operaciones de transformación utlizando <tt>%>%</tt>, de forma similar al operador | en bash.
+
+* [Funciones de transformación de datos](http://r4ds.had.co.nz/transform.html): Permiten generar una nueva tabla de datos a partir de la tabla recibida como primer argumento o a través del _pipe_. Emplearemos [<tt>select</tt>](http://r4ds.had.co.nz/transform.html#select-columns-with-select) (para selección de columnas) y [<tt>mutate</tt>](http://r4ds.had.co.nz/transform.html#add-new-variables-with-mutate) (para generar nuevas columnas o modificar las ya existentes).
+
+La tabla de datos obtenidas, que mostramos utilizando _()_, se guarda en el fichero _all-died.csv_, que enviaremos como _submission_ a la [competición de Kaggle](https://www.kaggle.com/c/titanic/submit).
+
+```{r}
+(test <- 
+  read_csv('test.csv') %>%
+  select(one_of('PassengerId')) %>%
+  mutate(Survived = 0)
+)
+write_csv(test, "all-died.csv")
+```
+![Resultados predicción 1](./all-died-submission.png)
+
+## Predictor refinado: todos los hombres mueren
+### Filtrado de datos
+Si filtramos las filas de los pasajeros que sobrevivieron, observamos que los datos indican una mayor cantidad de mujeres entre los supervivientes. 
+```{r}
+filtered <-
+  data_raw %>%
+  filter(Survived == 1) %>%
+  arrange(Age)
+```
+
+De hecho, podemos verlo con la función <tt>table</tt>. En este caso, el primer argumento es la variable que se utiliza para las filas y el segundo argumento la variable que se utiliza para las columnas. La tabla indica que, por ejemplo, de todos los pasajeros del barco, un 52% eran hombres que murieron.
+```{r}
+prop.table(table(data_raw$Sex, data_raw$Survived))
+```
+### Histogramas
+También podemos dibujar un histograma de los datos utilizando [<tt>ggplot</tt>](http://r4ds.had.co.nz/data-visualisation.html).
+
+[<tt>ggplot</tt>](http://r4ds.had.co.nz/data-visualisation.html) es un paquete de visualización de datos muy completo que ofrece una gramática para construir gráficos de una manera semi-declarativa, especificando las propiedades de las diferentes capas visuales.
+
+Generalmente, en la instrucción <tt>ggplot</tt> especificamos las características comunes para todo el gráfico, incluyendo el conjunto de datos que vamos a visualizar. Las capas visuales, como por ejemplo el histograma <tt>geom_histogram</tt>, se añaden al gráfico general. Cada una de las capas puede establecer a su vez diferentes parámetros visuales mediante el argumento <tt>aes</tt>. En este caso, estamos indicando que queremos que las barras del histograma se coloreen según el valor de la variable _Survived_ (parámetro _fill_).
+
+```{r}
+library(ggplot2)
+ggplot(data_raw) +
+  geom_histogram(aes(x = Age, fill = as.factor(Survived)), binwidth = 1)
+```
+Podemos modificar el formato del gráfico: paleta de colores, etiquetas, etc. utilizando <tt>ggthemes</tt> y <tt>scales</tt>.
+```{r}
+library(ggthemes)
+library(scales)
+plotdata <- 
+  data_raw %>%
+  mutate(Survived = as.factor(Survived))
+ggplot(plotdata) +
+  geom_histogram(aes(x = Age, fill = Survived), binwidth = 1) +
+  labs(title = "Titanic survivors", x = "Age", y = "# Passengers", fill = "Survived") +
+  theme_hc() + scale_fill_hc(labels = c('Yes', 'No'))
+```
+Si mostramos únicamente el histograma para los pasajeros que sobrevivieron, la relación se ve aún más clara. En el siguiente gráfico hemos modificado el parámetro _bindwidth_, de forma que agrupamos los pasajeros por tramos de edad más amplios.
+```{r}
+ggplot(filter(data_raw, Survived == 1)) +
+  geom_histogram(aes(x = Age, fill = as.factor(Sex)), binwidth = 15)
+```
+
+### Estudio de correlaciones
+Para comprobar numéricamente la relación entre las variables, incluyendo _Sex_ y _Survived_, realizamos un estudio de correlaciones con <tt>correlation_table</tt>. Atención, porque esta función necesita que los datos estén expresados de forma numérica.
+```{r}
+correlation_table(data_raw, target='Survived')
+
+d <- 
+  data_raw %>%
+  mutate(Sex_Num = ifelse(Sex == 'male', 0, 1))
+
+cor(d$Survived, d$Sex_Num)
+```
+### Realizar predicción con datos de test (2)
+La predicción de 'todos los hombres mueren' es sencilla de obtener asignando el valor de _Survived_ según el valor de _Sex_ mediante <tt>ifelse</tt>.
+```{r}
+(test <- 
+  read_csv('test.csv') %>%
+  mutate(Survived = ifelse(Sex == 'female', 1, 0)) %>%
+  select(one_of('PassengerId', 'Survived'))
+)
+write_csv(test, "men-died.csv")
+```
+Los resultados en Kaggle de esta predicción son algo mejores que los obtenidos con la predicción anterior.
+
+![Resultados predicción 2](./men-died-submission.png)
+
+## Predictor refinado: todos los hombres mueren, las mujeres en 3ª clase que pagan >= 20 mueren
+### Transformación de datos
+En la sección anterior hemos visto que existen otras variables correladas con _Survived_; además de _Sex_, tenemos _Fare_ y _Pclass_. Ambas son indicativas del nivel económico de los pasajeros. 
+```{r}
+cor(d$Pclass, d$Fare)
+```
+Podemos estudiar _Pclass_ para comprobar si es así, por ejemplo creando un histograma con esta variable en el eje x. En este caso utilizarmos un <tt>geom_bar</tt>, que también por defecto realiza un recuento de ocurrencias.
+```{r}
+ggplot(data_raw) +
+  geom_bar(aes(x = Pclass, fill = as.factor(Survived)))
+```
+Efectivamente, _Pclass_ es también determinante para la supervivencia, como ya sabíamos que ocurría con _Sex_. Por lo tanto, parece conveniente estudiar la influencia conjunta de ambas variables en la predicción. Una forma de hacerlo es construir una tabla que nos muestre las tasas de supervivencia por sexo y clase. Utilizamos para ello las funciones de <tt>dplyr</tt>:
+
+* Resumen: La función [<tt>summarise</tt>](http://r4ds.had.co.nz/transform.html#grouped-summaries-with-summarise) permite realizar operaciones de resumen sobre el conjunto de datos: agregaciones, sumas, etc.
+
+* Agrupación: La función [<tt>group_by</tt>](http://r4ds.had.co.nz/transform.html#grouping-by-multiple-variables) permite agrupar los datos en bloques, a los que se aplica individualmente el <tt>summarise</tt>.
+
+A continuación se muestran dos ejemplos sencillos de <tt>group_by</tt> y <tt>summarise</tt>, que ilustran respectivamente: (1) cómo obtener la edad media por clase (2) % de supervivencia respecto al total por clase y sexo.
+```{r}
+data_raw %>%
+  group_by(Pclass) %>%
+  summarise(AvgAge = mean(Age, na.rm = TRUE) )
+
+data_raw %>%
+  group_by(Pclass, Sex) %>%
+  summarise(Survived_G = sum(Survived) / length(Survived) )
+```
+Finalmente, se presenta el código para la tabla de tasas de superviviencia por sexo, clase y precio del billete. Para facilitar el cálculo, se han creado varios intervalos de precios mediante [<tt>case_when</tt>](https://www.rdocumentation.org/packages/dplyr/versions/0.7.3/topics/case_when), que permite implementar múltiples condiciones de tipo if-else de manera simple.
+```{r}
+data_raw %>%
+  filter(!is.na(Fare)) %>%
+  mutate(Fare_Interval = case_when(
+    Fare >= 30 ~ '30+',
+    Fare >= 20 & Fare < 30 ~ '20-30',
+    Fare < 20 & Fare >= 10 ~ '10-20',
+    Fare < 10 ~ '<10')) %>%
+  group_by(Fare_Interval, Pclass, Sex) %>%
+  summarise(Survived_G = sum(Survived) / length(Survived)) %>%
+  filter(Survived_G > 0.0) %>%
+  arrange(Pclass, desc(Survived_G))
+```
+
+### Realizar predicción con datos de test (3)
+Esta predicción establece que mueren todos los hombres y las mujeres en tercera clase (que pagaron más de 20$, que se añade como condición adicional).
+```{r}
+(test <- 
+  read_csv('test.csv') %>%
+  mutate(Survived = case_when(
+    Sex == 'female' & Pclass == 3 & Fare >= 20 ~ 0,
+    Sex == 'male' ~ 0,
+    TRUE ~ 1)) %>%
+  select(one_of('PassengerId', 'Survived'))
+)
+write_csv(test, "men-and-some-women-died.csv")
+```
+
+![Resultados predicción 3](./men-and-some-women-died-submission.png)
+
+## Predicción automática
+Los modelos de predicción anteriores expresan un conjunto de reglas heurísticas obtenidas mediante análisis exploratorio de los datos (EDA, en inglés). Para crear un modelo de clasificación de forma automática utilizaremos  [<tt>caret</tt>](http://topepo.github.io/caret/). Este paquete es un _wrapper_ para numerosos algoritmos de aprendizaje automático, ofreciendo una API simple y unificada. 
+
+En este ejemplo utilizamos árboles de regresión (CART, _classification and regression trees_). Estos árboles admiten un solo parámetro denominado _cp_ y que denota la complejidad permitida para los árboles resultado --una medida calculada a partir de la profundidad, la amplitud y el número de variables del árbol.
+
+```{r}
+library(caret)
+
+data <-
+  data_raw %>%
+  mutate(Survived = as.factor(ifelse(Survived == 1, 'Yes', 'No'))) %>%
+  mutate(Pclass = as.factor(Pclass)) %>%
+  mutate(Fare_Interval = as.factor(
+    case_when(
+      Fare >= 30 ~ 'More.than.30',
+      Fare >= 20 & Fare < 30 ~ 'Between.20.30',
+      Fare < 20 & Fare >= 10 ~ 'Between.10.20',
+      Fare < 10 ~ 'Less.than.10'))) %>%
+  select(Survived, Pclass, Sex, Fare_Interval)
+
+# Parámetros
+rpartCtrl <- trainControl(classProbs = TRUE)
+rpartParametersGrid <- expand.grid(.cp = c(0.01))
+
+# Creación de conjuntos de datos de entrenamiento (70%) y validación (20%)
+set.seed(0)
+trainIndex <- createDataPartition(data$Survived, p = .7, list = FALSE, times = 1)
+train <- data[trainIndex, ] 
+val   <- data[-trainIndex, ]
+
+# Aprendizaje del modelo
+rpartModel <- train(Survived ~ ., data = train, method = "rpart", metric = "Accuracy", trControl = rpartCtrl, tuneGrid = rpartParametersGrid)
+```
+Podemos visualizar el modelo de reglas.
+```{r}
+library(partykit)
+library(rattle)
+rpartModel_party <- as.party(rpartModel$finalModel)
+plot(rpartModel_party)
+fancyRpartPlot(rpartModel$finalModel)
+asRules(rpartModel$finalModel)
+```
+Y calcular la precisión del modelo sobre los datos de validación.
+```{r}
+prediction <- predict(rpartModel, val, type = "raw") 
+cm_train <- confusionMatrix(prediction, val[["Survived"]])
+cm_train
+
+prediction <- predict(rpartModel, val, type = "prob")  # probabilidad de superviviencia
+```
+Podemos considerar también otras medidas de calidad del clasificador; por ejemplo, ROC:
+```{r}
+rpartCtrl <- trainControl(verboseIter = F, classProbs = TRUE, summaryFunction = twoClassSummary)
+rpartModel <- train(Survived ~ ., data = train, method = "rpart", metric = "ROC", trControl = rpartCtrl, tuneGrid = rpartParametersGrid)
+
+library(pROC)
+predictionValidationProb <- predict(rpartModel, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+roc_validation <- plot.roc(auc, ylim=c(0,1), type = "S" , print.thres = T, main=paste('Validation AUC:', round(auc$auc[[1]], 2)))
+```
+Y aplicar cross-validation:
+```{r}
+rpartCtrl <- trainControl(verboseIter = T, classProbs = TRUE, summaryFunction = twoClassSummary, method = "cv", number = 10)
+rpartModel <- train(Survived ~ ., data = train, method = "rpart", metric = "ROC", trControl = rpartCtrl, tuneGrid = rpartParametersGrid)
+
+predictionValidationProb <- predict(rpartModel, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+roc_validation <- plot.roc(auc, ylim=c(0,1), type = "S" , print.thres = T, main=paste('Validation AUC:', round(auc$auc[[1]], 2)))
+```
+
+Podemos utilizar otras técnicas, como Random Forest:
+```{r}
+rfModel <- train(Survived ~ ., data = train, method = "rf", metric = "ROC", trControl = rpartCtrl)
+predictionValidationProb <- predict(rfModel, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+roc_validation <- plot.roc(auc, ylim=c(0,1), type = "S" , print.thres = T, main=paste('Validation AUC:', round(auc$auc[[1]], 2)))
+```
+
+## Valores perdidos
+Internamente, [<tt>rpart</tt>](https://cran.r-project.org/web/packages/rpart/vignettes/longintro.pdf) utiliza un procedimiento para estimar los valores perdidos. Otras técnicas se limitan a omitir las filas con valores perdidos, lo que significa perder muchos datos significativos. Es conveniente por tanto gestionar los valores perdidos de una forma más controlada.
+### MissingDataGUI
+[MissingDataGUI](https://github.com/chxy/MissingDataGUI) es una herramienta para explorar y reparar valores perdidos. Si bien su interfaz gráfica puede facilitar la gestión, la falta de documentación la hacen difícil de utilizar.
+```{r}
+# library(MissingDataGUI)
+# if (interactive()) {
+#        MissingDataGUI()
+# }
+```
+### VIM
+[VIM] facilita la visualización de la distribución de los valores perdidos. Puede utilizarse en combinación con [<tt>funModeling</tt>](https://livebook.datascienceheroes.com/exploratory-data-analysis.html#dataset-health-status).
+```{r}
+library(VIM)
+# aggr(data_raw, col=c('navyblue','red'), numbers=TRUE, sortVars=TRUE, labels=names(data_raw), cex.axis=.7, gap=3, ylab=c("Histogram of missing data", "Pattern"))
+```
+### mice
+[MICE](https://www.r-bloggers.com/imputing-missing-data-with-r-mice-package/) es una de las bibliotecas más completas para realizar imputación de valores perdidos.
+```{r}
+library(mice)
+colnames(data_raw) # valores perdidos: Cabin, Age, Embarked
+imputation <- mice(data_raw, method = c("", "", "", "", "", "mean", "", "", "", "", "cart", "cart"))
+
+imputation
+complete(imputation)
+plot(imputation)
+stripplot(imputation, pch = 20, cex = 1.2)
+```
+Podemos combinar <tt>mice</tt> y <tt>caret</tt> para crear modelos de predicción con varias imputaciones.
+```{r}
+## Imputación resultado
+data_raw_imputation_1 <- 
+  complete(imputation) %>%
+  mutate(Survived = as.factor(ifelse(Survived == 1, 'Yes', 'No'))) %>%
+  mutate(Pclass = as.factor(Pclass)) %>%
+  mutate(Fare_Interval = as.factor(
+    case_when(
+      Fare >= 30 ~ 'More.than.30',
+      Fare >= 20 & Fare < 30 ~ 'Between.20.30',
+      Fare < 20 & Fare >= 10 ~ 'Between.10.20',
+      Fare < 10 ~ 'Less.than.10'))) %>%
+  select(Survived, Age, Pclass, Sex, Fare_Interval)
+  
+train   <- data_raw_imputation_1[ trainIndex, ] 
+val     <- data_raw_imputation_1[-trainIndex, ]
+rPartModel_1 <- train(Survived ~ Age + Pclass + Sex + Fare_Interval, data = data_raw_imputation_1, method = "rpart", metric = "ROC", trControl = rpartCtrl, tuneGrid = rpartParametersGrid)
+
+## Imputación alternativa 1
+data_raw_imputation_2 <- 
+  complete(imputation, 2) %>%
+  mutate(Survived = as.factor(ifelse(Survived == 1, 'Yes', 'No'))) %>%
+  mutate(Pclass = as.factor(Pclass)) %>%
+  mutate(Fare_Interval = as.factor(
+    case_when(
+      Fare >= 30 ~ 'More.than.30',
+      Fare >= 20 & Fare < 30 ~ 'Between.20.30',
+      Fare < 20 & Fare >= 10 ~ 'Between.10.20',
+      Fare < 10 ~ 'Less.than.10'))) %>%
+  select(Survived, Age, Pclass, Sex, Fare_Interval)
+
+train   <- data_raw_imputation_2[ trainIndex, ] 
+val     <- data_raw_imputation_2[-trainIndex, ]
+rPartModel_2 <- train(Survived ~ Age + Pclass + Sex + Fare_Interval, data = data_raw_imputation_2, method = "rpart", metric = "ROC", trControl = rpartCtrl, tuneGrid = rpartParametersGrid)
+```
+Y después seleccionar el que mejor ha funcionado, en entrenamiento o validación. (En este caso no hay diferencias porque los valores imputados en _Age_ son mínimos.)
+```{r}
+# Comparación
+prediction_1 <- predict(rPartModel_1, val, type = "raw") 
+cm_train_1 <- confusionMatrix(prediction_1, val[["Survived"]])
+
+prediction_2 <- predict(rPartModel_2, val, type = "raw") 
+cm_train_2 <- confusionMatrix(prediction_2, val[["Survived"]])
+```
+## Valores con ruido
+Para gestionar valores con ruido, utilizamos las herramientas incluidas en [<tt>NoiseFiltersR</tt>](https://cran.r-project.org/web/packages/NoiseFiltersR/index.html).
+```{r}
+# Instalar RWeka (http://stackoverflow.com/a/36173681)
+library(NoiseFiltersR)
+data <- data_raw %>% 
+  mutate(Survived = as.factor(Survived)) %>%
+  mutate(Pclass = as.factor(Pclass))   %>%
+  mutate(Age = as.factor(Age))      %>%
+  mutate(Sex = as.factor(Sex))      %>%
+  select(Pclass, Survived, Age, Sex)
+
+noise_filter <- AENN(Survived ~., data)
+summary(noise_filter)
+identical(noise_filter$cleanData, data[setdiff(1:nrow(data), noise_filter$remIdx), ])
+```
+<script type="text/javascript">
+  <!-- https://stackoverflow.com/questions/39281266/use-internal-links-in-rmarkdown-html-output/39293457 -->
+  // When the document is fully rendered...
+  $(document).ready(function() {
+    // ...select all header elements...
+    $('h1, h2, h3, h4, h5').each(function() {
+      // ...and add an id to them corresponding to their 'titles'
+      $(this).attr('id', $(this).html());
+    });
+  });
+</script>
