@@ -1,0 +1,185 @@
+---
+title: "Reducción de datos con conjunto de datos Titanic"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+Reducción de datos con el dataset [titanic](https://www.kaggle.com/c/titanic/).
+
+## Lectura de datos
+```{r}
+library(tidyverse)
+data_raw <- read_csv('train.csv')
+data_raw
+```
+
+## Modelo predictivo
+```{r}
+library(caret)
+library(partykit)
+library(rattle)
+library(pROC)
+library(mice)
+
+set.seed(0)
+
+# Datos con imputacion de valores perdidos
+data_preproc <-
+  data_raw %>%
+  mutate(Survived = as.factor(ifelse(Survived == 1, 'Yes', 'No'))) %>%
+  mutate(Pclass = as.factor(Pclass)) %>%
+  select(Survived, Pclass, Sex, Age, SibSp, Parch, Fare, Embarked)
+imputation <-
+  mice(data_preproc, method = c("", "", "", "cart", "", "", "", "cart"), printFlag = F)
+data <- complete(imputation) %>%
+  na.exclude()
+
+# Parámetros
+rpartCtrl <- trainControl(verboseIter = F, classProbs = TRUE, summaryFunction = twoClassSummary)
+rpartParametersGrid <- expand.grid(.cp = c(0.01, 0.05))
+
+# Conjuntos de entrenamiento y validación
+trainIndex <- createDataPartition(data$Survived, p = .8, list = FALSE, times = 1)
+train <- data[trainIndex, ] 
+val   <- data[-trainIndex, ]
+
+# Entrenamiento del modelo
+rpartModel <- train(Survived ~ ., data = train, method = "rpart", metric = "ROC", trControl = rpartCtrl, tuneGrid = rpartParametersGrid)
+
+# Visualización del modelo
+rpartModel_party <- as.party(rpartModel$finalModel)
+plot(rpartModel_party)
+fancyRpartPlot(rpartModel$finalModel)
+
+# Cálculo de error
+prediction <- predict(rpartModel, val, type = "raw") 
+cm_train <- confusionMatrix(prediction, val[["Survived"]])
+cm_train
+
+predictionValidationProb <- predict(rpartModel, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+auc
+
+# Entrenamiento utilizando otra técnica
+rfModel <- train(Survived ~ ., data = train, method = "rf", metric = "ROC", trControl = rpartCtrl)
+predictionValidationProb <- predict(rfModel, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+auc
+```
+
+## Importancia de las variables
+```{r}
+library(funModeling)
+
+# Importancia (sobre el modelo)
+varImp(rpartModel)
+varImp(rfModel)
+
+# Correlacion (sobre las variables)
+correlation_table(data, target='Survived')
+data_num <-
+  data %>%
+  mutate_if(is.character, as.factor) %>%
+  mutate_if(is.factor, as.numeric)
+cor(data_num)
+
+# Correlacion detallada (sobre las variables)
+library(Hmisc)
+library(corrplot)
+rcorr(as.matrix(data_num))
+corrplot(cor(data_num), type = "upper", diag = F, order = "hclust", tl.col = "black", tl.srt = 45)
+
+heatmap(x = cor(data_num), symm = TRUE)
+
+# Importancia (sobre las variables)
+# en: entropy measured in bits
+# mi: mutual information
+# ig: information gain
+# gr: gain ratio
+var_rank_info(data, "Survived")
+```
+
+## Entrenamiento solo con variables seleccionadas
+```{r}
+# Datos de entrenamiento
+data_reduced <-
+  data %>%
+  select(Survived, Sex, Fare, Age, Pclass, SibSp)
+data_reduced
+
+train <- data_reduced[trainIndex, ] 
+val   <- data_reduced[-trainIndex, ]
+
+# rpart
+rpartModel_2 <- train(Survived ~ ., data = train, method = "rpart", metric = "ROC", trControl = rpartCtrl, tuneGrid = rpartParametersGrid)
+predictionValidationProb <- predict(rpartModel_2, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+auc
+
+# rf
+rfModel_2 <- train(Survived ~ ., data = train, method = "rf", metric = "ROC", trControl = rpartCtrl)
+predictionValidationProb <- predict(rfModel_2, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+auc
+```
+
+## Entrenamiento con valores discretizados
+```{r}
+data_reduced_disc <-
+  data_reduced %>%
+  mutate(Fare_Interval = case_when(
+    Fare >= 30 ~ 'More.than.30',
+    Fare >= 20 & Fare < 30 ~ 'Between.20.30',
+    Fare < 20  & Fare >= 10 ~ 'Between.10.20',
+    Fare < 10 ~ 'Less.than.10')) %>%
+  mutate(Age_Interval = case_when(
+    Age <= 18 ~ 'Less.than.18',
+    Age > 18 & Age <= 35 ~ 'Between.18.35',
+    Age > 35 & Age <= 55 ~ 'Between.35.55',
+    Age > 55 ~ 'More.than.55')) %>%
+  select(Survived, Sex, Fare_Interval, Age_Interval, Pclass, SibSp)
+
+train <- data_reduced_disc[trainIndex, ] 
+val   <- data_reduced_disc[-trainIndex, ]
+
+# rpart
+rpartModel_3 <- train(Survived ~ ., data = train, method = "rpart", metric = "ROC", trControl = rpartCtrl, tuneGrid = rpartParametersGrid)
+predictionValidationProb <- predict(rpartModel_3, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+auc
+
+# rf
+rfModel_3 <- train(Survived ~ ., data = train, method = "rf", metric = "ROC", trControl = rpartCtrl)
+predictionValidationProb <- predict(rfModel_3, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+auc
+
+# Discretizacion alternativa
+library(arules)
+disc <- discretize(data_reduced$Fare, method="frequency", labels = NULL)
+
+data_reduced_disc_2 <-
+  data_reduced %>%
+  mutate(Fare_Interval = discretize(Fare, method="cluster"))
+
+train <- data_reduced_disc_2[trainIndex, ] 
+val   <- data_reduced_disc_2[-trainIndex, ]
+
+# rpart
+rpartModel_4 <- train(Survived ~ ., data = train, method = "rpart", metric = "ROC", trControl = rpartCtrl, tuneGrid = rpartParametersGrid)
+
+predictionValidationProb <- predict(rpartModel_4, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+auc
+
+# rf
+rfModel_5 <- train(Survived ~ ., data = train, method = "rf", metric = "ROC", trControl = rpartCtrl)
+
+predictionValidationProb <- predict(rfModel_5, val, type = "prob")
+auc <- roc(val$Survived, predictionValidationProb[["Yes"]], levels = unique(val[["Survived"]]))
+auc
+```
+
