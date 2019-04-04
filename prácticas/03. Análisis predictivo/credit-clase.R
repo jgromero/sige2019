@@ -106,6 +106,16 @@ my_roc <- function(data, predictionProb, target_var, positive_class) {
 
 my_roc(val, predictionProb, "Class", "Good")
 
+# Modelo básico, ajuste de manual de hiperparámetros (.mtry)
+rfCtrl <- trainControl(verboseIter = F, classProbs = TRUE, method = "repeatedcv", number = 10, repeats = 1, summaryFunction = twoClassSummary)
+rfParametersGrid <- expand.grid(.mtry = c(sqrt(ncol(train))))
+rfModel <- train(Class ~ ., data = train, method = "rf", metric = "ROC", trControl = rfCtrl, tuneGrid = rfParametersGrid)
+print(rfModel)
+varImp(rfModel$finalModel)
+varImpPlot(rfModel$finalModel)
+my_roc(val, predict(rfModel, val, type = "prob"), "Class", "Good")
+
+
 
 
 
