@@ -7,3 +7,7 @@ library(caret)
 data(GermanCredit)
 data <- as_tibble(GermanCredit)
 glimpse(data)
+
+df_status(data)
+ggplot(data) + geom_histogram(aes(x = Class, fill = Class), stat = 'count')
+
