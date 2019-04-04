@@ -34,4 +34,9 @@ rpartModel <- train(
   tuneGrid = rpartParametersGrid)
 print(rpartModel)
 
+# Validacion
+prediction     <- predict(rpartModel, val, type = "raw")
+predictionProb <- predict(rpartModel, val, type = "prob")
+
+
 
