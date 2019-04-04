@@ -117,6 +117,26 @@ varImp(rfModel$finalModel)
 varImpPlot(rfModel$finalModel)
 my_roc(val, predict(rfModel, val, type = "prob"), "Class", "Good")
 
+# Modelo básico, ajuste manual de hiperparámetros (.mtry) utilizando un intervalo
+rfCtrl <- trainControl(verboseIter = F, classProbs = TRUE, method = "repeatedcv", number = 10, repeats = 1, summaryFunction = twoClassSummary)
+rfParametersGrid <- expand.grid(.mtry = c(1:5))
+rfModel <- train(Class ~ ., data = train, method = "rf", metric = "ROC", trControl = rfCtrl, tuneGrid = rfParametersGrid)
+print(rfModel)
+plot(rfModel)
+plot(rfModel$finalModel)
+my_roc(val, predict(rfModel, val, type = "prob"), "Class", "Good")
+
+# Modelo básico, ajuste con búsqueda aleatoria de hiperparámetros (.mtry)
+rfCtrl <- trainControl(verboseIter = F, classProbs = TRUE, method = "repeatedcv", number = 10, repeats = 1, search = "random", summaryFunction = twoClassSummary)
+rfModel <- train(Class ~ ., data = train, method = "rf", metric = "ROC", trControl = rfCtrl, tuneLength = 15)
+print(rfModel)
+plot(rfModel)
+my_roc(val, predict(rfModel, val, type = "prob"), "Class", "Good")
+
+# Ajuste con tuneRF (.mtry) (Class es la columna 10)
+bestmtry <- tuneRF(val[,-10], val[[10]], stepFactor=0.75, improve=1e-5, ntree=500)
+print(bestmtry)
+
 
 
 
