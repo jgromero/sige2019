@@ -44,6 +44,31 @@ predictionProb <- predict(rpartModel, val, type = "prob")
 auc <- roc(val$Class, predictionProb[["Good"]], levels = unique(val[["Class"]]))
 roc_validation <- plot.roc(auc, ylim=c(0,1), type = "S" , print.thres = T, main=paste('Validation AUC:', round(auc$auc[[1]], 2)))
 
+# Obtener valores de accuracy, precision, recall, f-score (manualmente)
+results <- cbind(val, prediction)
+results <- results %>%
+  mutate(contingency = as.factor(
+    case_when(
+      Class == 'Good' & prediction == 'Good' ~ 'TP',
+      Class == 'Bad'  & prediction == 'Good' ~ 'FP',
+      Class == 'Bad'  & prediction == 'Bad'  ~ 'TN',
+      Class == 'Good' & prediction == 'Bad'  ~ 'FN'))) 
+TP <- length(which(results$contingency == 'TP'))
+TN <- length(which(results$contingency == 'TN'))
+FP <- length(which(results$contingency == 'FP'))
+FN <- length(which(results$contingency == 'FN'))
+n  <- length(results$contingency)
+
+table(results$contingency) # comprobar recuento de TP, TN, FP, FN
+
+accuracy <- (TP + TN) / n
+error <- (FP + FN) / n
+
+precision   <- TP / (TP + FP)
+sensitivity <- TP / (TP + FN)
+specificity <- TN / (TN + FP)
+f_measure   <- (2 * TP) / (2 * TP + FP + FN)
+
 
 
 
