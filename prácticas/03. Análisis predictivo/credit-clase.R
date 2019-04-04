@@ -69,6 +69,11 @@ sensitivity <- TP / (TP + FN)
 specificity <- TN / (TN + FP)
 f_measure   <- (2 * TP) / (2 * TP + FP + FN)
 
+# Obtener valores de accuracy, precision, recall, f-score (usando confusionMatrix)
+cm_val <- confusionMatrix(prediction, val[["Class"]], positive = "Good")
+cm_val$table[c(2,1), c(2,1)] # invertir filas y columnas para ver primero la clase "Good"
+
+
 
 
 
