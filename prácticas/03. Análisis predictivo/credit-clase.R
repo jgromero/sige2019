@@ -1,6 +1,9 @@
 library(tidyverse)
 library(caret)
 library(funModeling)
+library(pROC)
+library(partykit)
+library(rattle)
 
 # Usando "German credit card data"
 # http://archive.ics.uci.edu/ml/datasets/Statlog+%28German+Credit+Data%29
