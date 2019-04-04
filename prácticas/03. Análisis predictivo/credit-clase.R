@@ -96,7 +96,17 @@ plot(partyModel_2, type = 'simple')
 fancyRpartPlot(rpartModel_2$finalModel)
 
 predictionProb <- predict(rpartModel_2, val, type = "prob")
+
+#' roc_res <- my_roc(data = validation, predict(rfModel, validation, type = "prob"), "Class", "Good")
+my_roc <- function(data, predictionProb, target_var, positive_class) {
+  auc <- roc(data[[target_var]], predictionProb[[positive_class]], levels = unique(data[[target_var]]))
+  roc <- plot.roc(auc, ylim=c(0,1), type = "S" , print.thres = T, main=paste('AUC:', round(auc$auc[[1]], 2)))
+  return(list("auc" = auc, "roc" = roc))
+}
+
 my_roc(val, predictionProb, "Class", "Good")
+
+
 
 
 
