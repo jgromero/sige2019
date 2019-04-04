@@ -1,9 +1,11 @@
-library(tidyverse)
 library(caret)
+library(tidyverse)
 library(funModeling)
 library(pROC)
 library(partykit)
 library(rattle)
+library(randomForest)
+library(xgboost)
 
 # Usando "German credit card data"
 # http://archive.ics.uci.edu/ml/datasets/Statlog+%28German+Credit+Data%29
