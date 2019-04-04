@@ -1,3 +1,4 @@
+library(tidyverse)
 library(caret)
 
 # Usando "German credit card data"
