@@ -38,5 +38,9 @@ print(rpartModel)
 prediction     <- predict(rpartModel, val, type = "raw")
 predictionProb <- predict(rpartModel, val, type = "prob")
 
+auc <- roc(val$Class, predictionProb[["Good"]], levels = unique(val[["Class"]]))
+roc_validation <- plot.roc(auc, ylim=c(0,1), type = "S" , print.thres = T, main=paste('Validation AUC:', round(auc$auc[[1]], 2)))
+
+
 
 
