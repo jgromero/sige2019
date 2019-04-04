@@ -73,6 +73,32 @@ f_measure   <- (2 * TP) / (2 * TP + FP + FN)
 cm_val <- confusionMatrix(prediction, val[["Class"]], positive = "Good")
 cm_val$table[c(2,1), c(2,1)] # invertir filas y columnas para ver primero la clase "Good"
 
+# Otro modelo utilizando rpart con cross-validation
+rpartCtrl_2 <- trainControl(
+  verboseIter = F, 
+  classProbs = TRUE, 
+  method = "repeatedcv",
+  number = 10,
+  repeats = 1,
+  summaryFunction = twoClassSummary)
+rpartModel_2 <- train(Class ~ ., data = train, method = "rpart", metric = "ROC", trControl = rpartCtrl_2, tuneGrid = rpartParametersGrid)
+print(rpartModel_2)
+varImp(rpartModel_2)
+dotPlot(varImp(rpartModel_2))
+
+plot(rpartModel_2)
+plot(rpartModel_2$finalModel)
+text(rpartModel_2$finalModel)
+
+partyModel_2 <- as.party(rpartModel_2$finalModel)
+plot(partyModel_2, type = 'simple')
+
+fancyRpartPlot(rpartModel_2$finalModel)
+
+predictionProb <- predict(rpartModel_2, val, type = "prob")
+my_roc(val, predictionProb, "Class", "Good")
+
+
 
 
 
