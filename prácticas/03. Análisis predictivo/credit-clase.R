@@ -137,6 +137,25 @@ my_roc(val, predict(rfModel, val, type = "prob"), "Class", "Good")
 bestmtry <- tuneRF(val[,-10], val[[10]], stepFactor=0.75, improve=1e-5, ntree=500)
 print(bestmtry)
 
+# Ajuste manual del parámetro número de árboles (ntrees), usando hiperparámetro anterior(.mtry)
+rfCtrl <- trainControl(verboseIter = F, classProbs = TRUE, method = "repeatedcv", number = 10, repeats = 1, summaryFunction = twoClassSummary)
+rfParametersGrid <- expand.grid(.mtry = bestmtry[,1])
+
+modellist <- list()
+for (ntrees in c(100, 150, 200, 250)) {
+  rfModel <- train(Class ~ ., data = train, method = "rf", metric= "ROC", tuneGrid = rfParametersGrid, trControl = rfCtrl, ntree = ntrees)
+  key <- toString(ntrees)
+  modellist[[key]] <- rfModel
+}
+
+results <- resamples(modellist)
+summary(results)
+dotplot(results)
+bwplot(diff(results), metric = "ROC")
+
+my_roc(val, predict(modellist[[3]], val, type = "prob"), "Class", "Good")
+
+
 
 
 
