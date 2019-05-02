@@ -3,6 +3,7 @@
 ## Curso 2018-2019
 ## Juan Gómez Romero
 ## Ejemplo basado en 'Deep Learning with R'
+## Datos: https://1drv.ms/u/s!AkY5JpKZWcvgzfQF12ZdEtiAIuYu-g
 ## -------------------------------------------------------------------------------------
 
 library(keras)
